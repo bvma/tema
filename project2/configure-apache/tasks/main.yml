@@ -1,0 +1,91 @@
+# tasks file for configure-apache
+
+- name: Check/Create vhosts folder 
+  file:
+    path: /var/www/vhosts
+    state: directory
+    mode : 0777
+  become: true
+
+- name: Create example_com folder
+  file:
+    path: /var/www/vhosts/example_com
+    state: directory
+    mode : 0777
+  become: true
+
+- name: Check/Create ansible-test user used for httpd
+  user:
+    name: "ansible-test"
+    groups: "ansible-test"
+    append: true
+    password: "{{ 'ansible_pass' | password_hash('sha512') }}"
+    comment: "used for apache"
+    createhome: yes
+    state: present
+  become: true
+
+- name: change user in httpd.conf
+  lineinfile: 
+    path: /etc/httpd/conf/httpd.conf 
+    regexp: '^User' 
+    line: 'User ansible-test'
+    backrefs: yes
+  become: true
+
+- name: change group in httpd.conf
+  lineinfile:
+    path: /etc/httpd/conf/httpd.conf
+    regexp: '^Group'
+    line: 'Group ansible-test'
+    backrefs: yes
+  become: true
+
+- name: Change permissions for vhosts folder
+  file:
+    path: /var/www/vhosts
+    owner: ansible-test
+    group: ansible-test
+    mode : 0777
+    recurse: yes
+  become: true
+
+- name: Httpd port 1
+  ansible.builtin.shell: netstat -anp | grep httpd | awk 'NR==1{print $4}' | grep -Eo '[0-9]{1,4}'
+  register: port1_result
+  become: true
+
+- set_fact: 
+    port1_result={{ port1_result.stdout }}
+
+- name: Httpd port 2
+  ansible.builtin.shell: netstat -anp | grep httpd | awk 'NR==2{print $4}' | grep -Eo '[0-9]{1,4}'
+  register: port2_result
+  become: true
+
+- set_fact:
+    port2_result={{ port2_result.stdout }}
+
+- name: Get user from apache config
+  ansible.builtin.shell: egrep '^User' /etc/httpd/conf/httpd.conf | awk '{print $2}'
+  register: ApacheUser_result 
+  become: true
+
+- set_fact:
+    ApacheUser_result={{ ApacheUser_result.stdout }}
+
+- name: Template index.html
+  ansible.builtin.template:
+    src: index.j2
+    dest: /var/www/vhosts/example_com/index.html
+    owner: ansible-test
+    group: ansible-test
+    mode: '0644'
+
+- name: Template index.html
+  ansible.builtin.template:
+    src: index.j2
+    dest: /var/www/html/index.html
+    owner: ansible-test
+    group: ansible-test
+    mode: '0644'

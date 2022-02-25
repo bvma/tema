@@ -1,0 +1,65 @@
+- name: Read users from CSV file and return a list
+  community.general.read_csv:
+    path: /home/ansible/project2/data/users.csv
+  register: users
+  delegate_to: localhost
+
+- name: Ensure groups exists
+  ansible.builtin.group:
+    name: '{{ item }}'
+    state: present
+  loop:
+    - Operations
+    - Developers
+    - ansible-test
+  become: true
+
+- name: create users from csv
+  user:
+    name: "{{ item.Username }}"
+    uid: "{{ item.UID }}"
+    groups: "{{ item.Groups }}"
+    append: true
+    password: "{{ item.Password | password_hash('sha512') }}"
+    comment: "{{ item.First_name }} {{ item.Last_name }}"
+    createhome: yes
+    state: present
+  loop: "{{ users.list }}"
+  become: true
+
+- name: add users to wheel
+  user:
+    name: "{{ item }}"
+    groups: wheel
+    append: yes
+    state: present
+  loop:
+    - booker12
+    - smith79
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: reading the data csv file
+  community.general.read_csv:
+    path: /home/ansible/project2/data/data.csv
+  register: private
+  delegate_to: 127.0.0.1
+
+- name: Create .ssh file for users
+  file:
+    path: /home/{{ item.Username }}/.ssh
+    state: directory
+    mode : 0777
+  loop: "{{ private.list }}"
+
+- name: Create authorized keys file for users
+  file:
+    path: /home/{{ item.Username }}/.ssh/authorized_keys
+    state: touch
+    mode : 0777
+  loop: "{{ private.list }}"
+
+- name: appending keys for each user
+  lineinfile:
+    path: /home/{{ item.Username }}/.ssh/authorized_keys
+    line: "{{ item.key }}"
+  loop: "{{ private.list }}"
